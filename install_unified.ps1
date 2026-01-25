@@ -99,7 +99,7 @@ $profileContent = @"
 `$OutputEncoding = [System.Text.Encoding]::UTF8
 
 # ============================================================
-# Claude Code Unified (GLM Mode + Skill Pack + Auto-Failover)
+# Claude Code Unified (GLM Mode + Skill Pack + Active-Passive Failover)
 # ============================================================
 
 `$env:ZAI_API_KEY_1 = "$ApiKey"
@@ -117,31 +117,30 @@ function claude {
         }
         Write-Host "🚀 [Anti-Gravity] GLM Mode Activated" -ForegroundColor Cyan
         
-        # Rotation & Failover Logic
+        # Failover Logic (Active-Passive) to avoid 'New Key' prompts
         `$toggleFile = Join-Path `$HOME ".claude\key_toggle"
         if (-not (Test-Path (Split-Path `$toggleFile))) { New-Item -ItemType Directory -Path (Split-Path `$toggleFile) -Force | Out-Null }
         
-        # Load starting index
+        # Always start with Sticky Session (Last successful key)
         `$startIndex = 0
         if (Test-Path `$toggleFile) { `$startIndex = [int](Get-Content `$toggleFile -Raw) }
         
-        # Update for next time (Load Balancing)
-        Set-Content -Path `$toggleFile -Value ((`$startIndex + 1) % 2)
-        
-        `$maxRetries = 1
+        `$maxRetries = 3
         `$attempt = 0
         `$success = `$false
         
         while (`$attempt -le `$maxRetries -and -not `$success) {
+            # Use current index (Effective Key)
             `$currentIndex = (`$startIndex + `$attempt) % 2
             
             if (`$currentIndex -eq 0) { `$currentKey = `$env:ZAI_API_KEY_1; `$kId = "1" } else { `$currentKey = `$env:ZAI_API_KEY_2; `$kId = "2" }
             
             if (`$attempt -gt 0) {
-                Write-Host "`n🔄 [Auto-Failover] Switching to Key `$kId due to previous error..." -ForegroundColor Yellow
+                Write-Host "`n🔄 [Auto-Failover] Switching to Key `$kId..." -ForegroundColor Yellow
                 Start-Sleep -Seconds 1
-            } else {
-                Write-Host "   -> Using Key `$kId" -ForegroundColor Cyan
+                
+                # Save this new good key as the default for next time (Sticky)
+                Set-Content -Path `$toggleFile -Value `$currentIndex
             }
             
             `$env:ANTHROPIC_API_KEY = `$currentKey
@@ -154,7 +153,7 @@ function claude {
             if (`$LASTEXITCODE -eq 0) {
                 `$success = `$true
             } else {
-                Write-Host "⚠️ [Anti-Gravity] Process exited with code `$LASTEXITCODE." -ForegroundColor Yellow
+                Write-Host "⚠️ [Anti-Gravity] Error detected (Code: `$LASTEXITCODE)." -ForegroundColor Yellow
                 `$attempt++
             }
         }
