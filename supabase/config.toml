@@ -1,4 +1,0 @@
-# Supabase Edge Functions 설정
-
-[functions.kbj2]
-verify_jwt = false  # 개발용: 배포 후 true로 변경
